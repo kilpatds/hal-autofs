@@ -1,0 +1,104 @@
+#!/bin/bash
+#
+# Daemon to edit /etc/auto.hal when new devices are added
+#
+# chkconfig: 345 99 01
+# processname: /usr/local/bin/hal_autofs.pl
+# config: /etc/sysconfig/hal_autofs
+# description: Automounts filesystems on demand
+
+#
+# Location of the automount daemon and the init directory
+#
+DAEMON=/usr/local/bin/hal_autofs.py
+prog=hal_autofs
+initdir=/etc/init.d
+confdir=/etc/sysconfig
+
+test -e $DAEMON || exit 0
+
+if [ -r $initdir/functions ]; then
+	. $initdir/functions
+fi
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+export PATH
+
+#
+# load customized configuation settings
+#
+if [ -r $confdir/$prog ]; then
+	. $confdir/$prog
+fi
+
+function start() {
+	echo -n $"Starting $prog: "
+	daemon $DAEMON $OPTIONS
+	RETVAL=$?
+	[ $RETVAL -eq 0 ] && touch /var/lock/subsys/$prog
+	echo
+	return $RETVAL
+}
+
+function stop() {
+	echo -n $"Stopping $prog: "
+	killproc hal_autofs.py
+	RETVAL=$?
+	echo
+	if [ $RETVAL = 0 ] ; then
+           rm -f /var/lock/subsys/$prog
+        else
+           RETVAL=1
+        fi
+        return $RETVAL
+}
+
+function restart() {
+	stop
+	start
+}
+
+function reload() {
+	if [ ! -f /var/lock/subsys/autofs ]; then
+		echo $"$prog not running"
+		RETVAL=1
+		return $RETVAL
+	fi
+	pid=`pidof $DAEMON`
+	if [ -z $pid ]; then
+		echo $"$prog not running"
+		RETVAL=1
+	else
+		kill -HUP $pid 2> /dev/null
+		echo "Done"
+		RETVAL=0
+	fi
+	return $RETVAL
+}
+
+RETVAL=0
+
+case "$1" in
+	start)
+		start
+		;;
+	stop)
+		stop
+		;;
+	status)
+		status $prog
+		;;
+	restart)
+		restart
+		;;
+	reload)
+		reload
+		;;
+	*)
+		echo $"Usage: $0 {start|stop|status|restart|reload}"
+		exit 1;
+		;;
+esac
+
+exit $?
+
