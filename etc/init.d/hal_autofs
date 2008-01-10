@@ -3,14 +3,14 @@
 # Daemon to edit /etc/auto.hal when new devices are added
 #
 # chkconfig: 345 99 01
-# processname: /usr/local/bin/hal_autofs.pl
+# processname: /usr/bin/hal_autofs.pl
 # config: /etc/sysconfig/hal_autofs
 # description: Automounts filesystems on demand
 
 #
 # Location of the automount daemon and the init directory
 #
-DAEMON=/usr/local/bin/hal_autofs.py
+DAEMON=/usr/bin/hal_autofs.py
 prog=hal_autofs
 initdir=/etc/init.d
 confdir=/etc/sysconfig
