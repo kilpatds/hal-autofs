@@ -218,7 +218,7 @@ def rewrite_autofs_file():
     for device,block in dev_by_dev.iteritems():
         if not block['active']:
             continue
-        mount_options = "-fstype="+block['fs']+",nosuid,nodev,sync"
+        mount_options = "-fstype="+block['fs']+",nosuid,nodev"
         if block['fs'].find('fat') > -1:
             mount_options += ",uid=nobody,gid=users,umask=117,dmask=007"
         f.write(
