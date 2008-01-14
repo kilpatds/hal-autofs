@@ -1,5 +1,7 @@
 License: BSD 2-clause
 Summary: Use the automounter to handle removable media
+Version: 0.5
 # The default is int(time), which works but's a bit ugly
+# use --release=`svn version` in reality
 Release: 1
 Name: hal-autofs
