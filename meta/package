@@ -1,0 +1,4 @@
+License: BSD 2-clause
+Summary: Use the automounter to handle removable media
+# The default is int(time), which works but's a bit ugly
+Release: 1
