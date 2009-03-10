@@ -289,6 +289,7 @@ def device_removed_server(udi):
         return
     devices[udi]['active'] = 0
     rewrite_autofs_file()
+    #os.kill(pid_of_automount,signal.SIG_HUP);
     os.spawnlp(os.P_WAIT, "/sbin/service", "autofs", "reload")
     return 0
 
