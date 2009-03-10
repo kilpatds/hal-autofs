@@ -60,6 +60,14 @@ cd_index         = 0            # cdrom, cdrom1, cdrom2, ...
 dve_index        = 0
 vol_index        = 0
 
+desk_to_launcher = {
+    'kde' :    "kfmclient openProfile filemanagement %(URL)s",
+    'kde4' :   "dolphin %(PATH)s",
+    'gnome' :  "nautilus -n %(PATH)s"
+}
+
+desktop_environment = ""
+
 type_to_icon     = {
     'cdrom':   "cdrom_unmount",
     'disk':    "usbpendrive_unmount",
@@ -72,8 +80,7 @@ desktop_template = """
 [Desktop Entry]
 Name=%(NAME)s
 Type=Application
-Exec=kfmclient openProfile filemanagement %(URL)s
-#Exec=nautilus -n --browser %(URL)s
+Exec=%(LAUNCHER)s
 Icon=%(ICON)s
 GenericName=Device Link
 Terminal=false
@@ -230,12 +237,13 @@ def rewrite_autofs_file():
                     block['name']
                 + "\t" + mount_options
                 + "\t:" + block['device']+"\n")
+    f.sync();
     f.close();
     return True
 
 # Added
 def device_added_desktop(udi):
-    global desktop, desktop_template, mount_name_pattern
+    global desktop, desktop_template, mount_name_pattern, desk_to_launcher, desktop_environment
 
     if not device_filter(udi):
         return
@@ -246,8 +254,11 @@ def device_added_desktop(udi):
 
     path = desktop + mount_name +  '.desktop'
     f = open(path, 'w');
+    exec_str = desk_to_launcher[desktop_environment] % {
+        'URL':url, 'PATH':("/misc/"+mount_name) };
     text = desktop_template % {
-        'NAME':name, 'URL':url, 'ICON':type_to_icon[devices[udi]['type']] };
+        'NAME':name, 'LAUNCHER':exec_str,
+        'ICON':type_to_icon[devices[udi]['type']] };
     f.write(text);
     f.close();
 
@@ -275,7 +286,7 @@ def device_removed_server(udi):
         return
     devices[udi]['active'] = 0
     rewrite_autofs_file()
-    #os.spawnlp(os.P_WAIT, "/sbin/service", "autofs", "reload")
+    os.spawnlp(os.P_WAIT, "/sbin/service", "autofs", "reload")
     return 0
 
 def device_removed_desktop(udi):
@@ -295,7 +306,7 @@ def device_removed_callback(udi):
         return device_removed_desktop(udi)
 
 def main():
-    global options, bus
+    global options, bus, desktop_environment
 
     parser = OptionParser(usage="""
     %prog [options]
@@ -352,6 +363,18 @@ def main():
                     os.unlink(file)
                     break
             f.close
+
+    # Detect the environment
+    if "DESKTOP_SESSION" in os.environ:
+        desktop_environment = os.environ['DESKTOP_SESSION'];
+    else:
+        desktop_environment = "gnome"
+
+    if desktop_environment == "kde" and os.access("/usr/bin/dolphin",X_OK):
+        desktop_environment = "kde4";
+
+    if options.verbose:
+        print "Assuming desktop environment : " + desktop_environment + "\n" 
 
     # Back to main
     hal_manager = bus.get_object('org.freedesktop.Hal',
