@@ -9,7 +9,10 @@ import gobject
 import resource
 from optparse import OptionParser
 
-if getattr(dbus, 'version', (0,0,0)) >= (0,41,0):
+if getattr(dbus, 'version', (0,0,0)) >= (0,80,0):
+    from dbus.mainloop.glib import DBusGMainLoop
+    DBusGMainLoop(set_as_default=True)
+elif getattr(dbus, 'version', (0,0,0)) >= (0,41,0):
     import dbus.glib
 
 def daemonize():
@@ -354,6 +357,13 @@ def main():
     elif options.verbose:
         print "bus = " + str(bus)
 
+    sessionbus = dbus.SessionBus()
+    if not sessionbus:
+        print "Failed to connect to session dbus.  Exiting."
+        sys.exit()
+    elif options.verbose:
+        print "sesbus = " + str(sessionbus)
+
     # Clean up ~/Desktop...
     if not options.server:
         for file in glob.glob(desktop + "/*.desktop"):
@@ -370,7 +380,7 @@ def main():
     else:
         desktop_environment = "gnome"
 
-    if desktop_environment == "kde" and os.access("/usr/bin/dolphin",X_OK):
+    if desktop_environment == "kde" and os.access("/usr/bin/dolphin",os.X_OK):
         desktop_environment = "kde4";
 
     if options.verbose:
