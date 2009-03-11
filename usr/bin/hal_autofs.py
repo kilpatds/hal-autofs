@@ -358,12 +358,13 @@ def main():
     elif options.verbose:
         print "bus = " + str(bus)
 
-    sessionbus = dbus.SessionBus()
-    if not sessionbus:
-        print "Failed to connect to session dbus.  Exiting."
-        sys.exit()
-    elif options.verbose:
-        print "sesbus = " + str(sessionbus)
+    if not options.server:
+        sessionbus = dbus.SessionBus()
+        if not sessionbus:
+            print "Failed to connect to session dbus.  Exiting."
+            sys.exit()
+        elif options.verbose:
+            print "sesbus = " + str(sessionbus)
 
     # Clean up ~/Desktop...
     if not options.server:
