@@ -7,6 +7,7 @@ import glob
 import dbus
 import gobject 
 import resource
+import subprocess
 from optparse import OptionParser
 
 if getattr(dbus, 'version', (0,0,0)) >= (0,80,0):
@@ -240,8 +241,15 @@ def rewrite_autofs_file():
                     block['name']
                 + "\t" + mount_options
                 + "\t:" + block['device']+"\n")
-    f.sync();
     f.close();
+
+    # HUP autofs
+    p = subprocess.Popen(["/sbin/service","autofs","reload"],
+        stdout=subprocess.PIPE, close_fds=True)
+    (stdout,stderr) = p.communicate();
+    if options.verbose:
+        print stdout
+
     return True
 
 # Added
@@ -289,8 +297,6 @@ def device_removed_server(udi):
         return
     devices[udi]['active'] = 0
     rewrite_autofs_file()
-    #os.kill(pid_of_automount,signal.SIG_HUP);
-    os.spawnlp(os.P_WAIT, "/sbin/service", "autofs", "reload")
     return 0
 
 def device_removed_desktop(udi):
@@ -358,7 +364,9 @@ def main():
     elif options.verbose:
         print "bus = " + str(bus)
 
+    # Clean up ~/Desktop...
     if not options.server:
+        # connect to the session bus, so we go exit at logout
         sessionbus = dbus.SessionBus()
         if not sessionbus:
             print "Failed to connect to session dbus.  Exiting."
@@ -366,8 +374,6 @@ def main():
         elif options.verbose:
             print "sesbus = " + str(sessionbus)
 
-    # Clean up ~/Desktop...
-    if not options.server:
         for file in glob.glob(desktop + "/*.desktop"):
             f = open(file,'r');
             for line in f:
@@ -375,18 +381,18 @@ def main():
                     os.unlink(file)
                     break
             f.close
+        # Detect the environment
+        if "DESKTOP_SESSION" in os.environ:
+            desktop_environment = os.environ['DESKTOP_SESSION'];
+        else:
+            desktop_environment = "gnome"
 
-    # Detect the environment
-    if "DESKTOP_SESSION" in os.environ:
-        desktop_environment = os.environ['DESKTOP_SESSION'];
-    else:
-        desktop_environment = "gnome"
+        if (desktop_environment == "kde"
+                and os.access("/usr/bin/dolphin",os.X_OK)):
+            desktop_environment = "kde4";
 
-    if desktop_environment == "kde" and os.access("/usr/bin/dolphin",os.X_OK):
-        desktop_environment = "kde4";
-
-    if options.verbose:
-        print "Assuming desktop environment : " + desktop_environment + "\n" 
+        if options.verbose:
+            print "Assuming desktop environment : " + desktop_environment + "\n" 
 
     # Back to main
     hal_manager = bus.get_object('org.freedesktop.Hal',
