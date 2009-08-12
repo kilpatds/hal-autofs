@@ -76,7 +76,8 @@ type_to_icon     = {
     'cdrom':   "cdrom_unmount",
     'disk':    "usbpendrive_unmount",
     'ipod':    "ipod_unmount",
-    'default': "hdd_unmount"
+    'default': "hdd_unmount",
+    'sd_mmc':  "media-flash-sd"
 }
 
 desktop          = os.path.expanduser('~/Desktop/')
@@ -264,7 +265,9 @@ def device_added_desktop(udi):
     url = "file:///misc/" + mount_name
 
     path = desktop + mount_name +  '.desktop'
-    f = open(path, 'w');
+    f = open(path, 'w')
+    # New security policy... has to be +x to work.
+    os.fchmod(f.fileno(),0744)
     exec_str = desk_to_launcher[desktop_environment] % {
         'URL':url, 'PATH':("/misc/"+mount_name) };
     text = desktop_template % {
