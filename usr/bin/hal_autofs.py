@@ -1,13 +1,8 @@
 #!/usr/bin/python
 
-import re
-import os
-import sys
-import glob
-import dbus
-import gobject 
-import resource
-import subprocess
+import re, os, sys, glob, resource, subprocess
+import dbus, gobject
+import logging, logging.handlers
 from optparse import OptionParser
 
 if getattr(dbus, 'version', (0,0,0)) >= (0,80,0):
@@ -101,8 +96,8 @@ def get_name(props,proposed = False):
               "volume.label" ]
     for key in order:
         if key in props and len(props[key]) > 0:
-            if options.verbose and not proposed:
-                print("get_name("+props['block.device']+") = '" +
+            if not proposed:
+                logging.info("get_name("+props['block.device']+") = '" +
                         mount_name_pattern.sub("_",props[key])+"'!")
             return (mount_name_pattern.sub("_",props[key]),True)
     # er?
@@ -120,8 +115,8 @@ def get_name(props,proposed = False):
         base = 'volume' + str(vol_index)
         if not proposed:
             vol_index += 1
-    if options.verbose and not proposed:
-        print "get_name("+props['block.device']+") = '" + base +"'?"   
+    if not proposed:
+        logging.info("get_name("+props['block.device']+") = '" + base +"'?")
     return (base,False)
 
 def device_filter(udi):
@@ -131,22 +126,19 @@ def device_filter(udi):
     props = deviface.GetAllProperties()
 
     if not "block.device" in props:
-        if options.verbose:
-            print "can't find device: " + udi
+        logging.info("can't find device: " + udi)
         return False
 
     device = props['block.device']
 
     if not "block.storage_device" in props:
-        if options.verbose:
-            print "can't find parent: " + udi + device
+        logging.info("can't find parent: " + udi + device)
         return False
 
     if (props['block.storage_device'] == udi and
             "storage.drive_type" in props and
             props['storage.drive_type'] != 'cdrom'):
-        if options.verbose:
-            print "skipping: parent same as device: " + udi + device
+        logging.info("skipping: parent same as device: " + udi + device)
         return False
 
     # we need certain properties from the storage device
@@ -165,17 +157,15 @@ def device_filter(udi):
         removable = 0
 
     if (not hotplug and not removable):
-        if options.verbose:
-            print ("not hotpluggable or removable: " + udi + ":" + device +
+        logging.info("not hotpluggable or removable: " + udi + ":" + device +
                    ":" + repr(block_props['storage.hotpluggable']))
         return False
 
     if ('volume.fsusage' in props                   and 
             props['volume.fsusage'] != 'filesystem' and
             props['volume.fsusage'] != ''):
-        if options.verbose:
-            print("didn't like fsusage: " + props['volume.fsusage'] + "\n\t"
-                    + udi + ":" + device)
+        logging.info("didn't like fsusage: " + props['volume.fsusage']
+                     + "\n\t" + udi + ":" + device)
         return False
 
     block = None
@@ -209,11 +199,10 @@ def device_filter(udi):
             block['fs']      = 'auto'
             block['fGood_fs'] = False
 
-    if options.verbose:
-        str = "Adding " + device + ":" + udi + " as '" + block['name'] + "'"
-        if block['fGood_name']:
-            str += "!"
-        print str
+    str = "Adding " + device + ":" + udi + " as '" + block['name'] + "'"
+    if block['fGood_name']:
+        str += "!"
+    logging.info(str)
 
     devices[udi] = dev_by_dev[device] = block
 
@@ -248,8 +237,10 @@ def rewrite_autofs_file():
     p = subprocess.Popen(["/sbin/service","autofs","reload"],
         stdout=subprocess.PIPE, close_fds=True)
     (stdout,stderr) = p.communicate();
-    if options.verbose:
-        print stdout
+    if stderr is not None:
+        logging.warn("service stderr: %s" % stderr)
+    if stdout is not None:
+        logging.info("service stdout: %s" % stdout)
 
     return True
 
@@ -266,8 +257,11 @@ def device_added_desktop(udi):
 
     path = desktop + mount_name +  '.desktop'
     f = open(path, 'w')
-    # New security policy... has to be +x to work.
-    os.fchmod(f.fileno(),0744)
+    # New security policy... has to be +x to work.  Comes w/ newer python though
+    try:
+        os.fchmod(f.fileno(),0744)
+    except (AttributeError):
+        pass
     exec_str = desk_to_launcher[desktop_environment] % {
         'URL':url, 'PATH':("/misc/"+mount_name) };
     text = desktop_template % {
@@ -307,7 +301,7 @@ def device_removed_desktop(udi):
     if not udi in devices:
         return
     if options.verbose:
-        print "nuking file " + devices[udi]['path']
+        logging.info("nuking file " + devices[udi]['path'])
     os.unlink(devices[udi]['path'])
     devices[udi]['active'] = 0
 
@@ -353,8 +347,21 @@ def main():
     if len(args) != 0:
         parser.error("Incorrect number of arguments")
 
+    # set up logging
+    if options.foreground:
+        logger = logging.StreamHandler()
+        logger.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
+    else:
+        logger = logging.handlers.SysLogHandler("/dev/log", 11)
+        logger.setFormatter(logging.Formatter(
+            '%(filename)s: %(levelname)s: %(message)s'))
+
     if options.verbose:
-        print repr(options)
+        logging.getLogger().setLevel(logging.INFO)
+    else:
+        logging.getLogger().setLevel(logging.WARN)
+
+    logging.info("Options: %s" % repr(options))
 
     # daemonizing after connecting to the dbus breaks that connection
     if not options.foreground:
@@ -362,20 +369,20 @@ def main():
 
     bus = dbus.SystemBus()
     if not bus:
-        print "Failed to connect to system dbus.  Exiting."
+        logging.error("Failed to connect to system dbus.  Exiting.")
         sys.exit()
-    elif options.verbose:
-        print "bus = " + str(bus)
+
+    logging.info("bus: %s" % str(bus))
 
     # Clean up ~/Desktop...
     if not options.server:
         # connect to the session bus, so we go exit at logout
         sessionbus = dbus.SessionBus()
         if not sessionbus:
-            print "Failed to connect to session dbus.  Exiting."
+            logging.error("Failed to connect to session dbus.  Exiting.")
             sys.exit()
-        elif options.verbose:
-            print "sesbus = " + str(sessionbus)
+
+        logging.info("sesbus: %s" % str(sessionbus))
 
         for file in glob.glob(desktop + "/*.desktop"):
             f = open(file,'r');
@@ -394,8 +401,7 @@ def main():
                 and os.access("/usr/bin/dolphin",os.X_OK)):
             desktop_environment = "kde4";
 
-        if options.verbose:
-            print "Assuming desktop environment : " + desktop_environment + "\n" 
+        logging.info("Assuming desktop environment : %s" % desktop_environment)
 
     # Back to main
     hal_manager = bus.get_object('org.freedesktop.Hal',
@@ -425,7 +431,11 @@ def main():
             '/org/freedesktop/Hal/Manager')
 
     mainloop = gobject.MainLoop()
-    mainloop.run()
+    try:
+        mainloop.run()
+    except (KeyboardInterrupt):
+        pass
+    # TBD: logging, log exceptions to syslog
 
 if __name__ == "__main__":
     main()
