@@ -355,6 +355,7 @@ def main():
         logger = logging.handlers.SysLogHandler("/dev/log", 11)
         logger.setFormatter(logging.Formatter(
             '%(filename)s: %(levelname)s: %(message)s'))
+    logging.getLogger().addHandler(logger)
 
     if options.verbose:
         logging.getLogger().setLevel(logging.INFO)
